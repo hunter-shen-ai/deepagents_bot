@@ -170,7 +170,7 @@ async function main() {
         }
         : undefined;
 
-    const { agent } = await createAgent(config, { execApprovalPrompt });
+    const { agent, cleanup } = await createAgent(config, { execApprovalPrompt });
 
     // Create model instance for compaction
     const compactionModel = new ChatOpenAI({
@@ -294,6 +294,12 @@ async function main() {
         if (config.agent.compaction.enabled && hasConversation && flushState.totalTokens > 0) {
             console.log();
             await executeMemoryFlush();
+        }
+
+        try {
+            await cleanup();
+        } catch (error) {
+            console.warn(`${colors.yellow}[MCP] cleanup failed:${colors.reset}`, error instanceof Error ? error.message : String(error));
         }
 
         console.log(`\n${colors.gray}Goodbye! 👋${colors.reset}`);

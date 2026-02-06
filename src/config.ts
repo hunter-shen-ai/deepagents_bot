@@ -51,6 +51,60 @@ export interface ExecConfig {
     approvals: ExecApprovalsConfig;
 }
 
+export type MCPOutputHandling =
+    | 'content'
+    | 'artifact'
+    | {
+        text?: 'content' | 'artifact';
+        image?: 'content' | 'artifact';
+        audio?: 'content' | 'artifact';
+        resource?: 'content' | 'artifact';
+        resource_link?: 'content' | 'artifact';
+    };
+
+export interface MCPServerBaseConfig {
+    defaultToolTimeout?: number;
+    outputHandling?: MCPOutputHandling;
+}
+
+export interface MCPServerStdioConfig extends MCPServerBaseConfig {
+    transport: 'stdio';
+    command: string;
+    args?: string[];
+    env?: Record<string, string>;
+    cwd?: string;
+    stderr?: 'overlapped' | 'pipe' | 'ignore' | 'inherit';
+    restart?: {
+        enabled?: boolean;
+        maxAttempts?: number;
+        delayMs?: number;
+    };
+}
+
+export interface MCPServerHttpConfig extends MCPServerBaseConfig {
+    transport: 'http' | 'sse';
+    url: string;
+    headers?: Record<string, string>;
+    reconnect?: {
+        enabled?: boolean;
+        maxAttempts?: number;
+        delayMs?: number;
+    };
+    automaticSSEFallback?: boolean;
+}
+
+export type MCPServerConfig = MCPServerStdioConfig | MCPServerHttpConfig;
+
+export interface MCPConfig {
+    enabled: boolean;
+    throwOnLoadError?: boolean;
+    prefixToolNameWithServerName?: boolean;
+    additionalToolNamePrefix?: string;
+    useStandardContentBlocks?: boolean;
+    onConnectionError?: 'throw' | 'ignore';
+    servers: Record<string, MCPServerConfig>;
+}
+
 export interface DingTalkConfig {
     enabled: boolean;
     clientId: string;
@@ -74,6 +128,7 @@ export interface Config {
     openai: OpenAIConfig;
     agent: AgentConfig;
     exec: ExecConfig;
+    mcp: MCPConfig;
     dingtalk?: DingTalkConfig;
 }
 
@@ -111,6 +166,15 @@ const DEFAULT_CONFIG = {
         approvals: {
             enabled: false,
         },
+    },
+    mcp: {
+        enabled: false,
+        throwOnLoadError: true,
+        prefixToolNameWithServerName: true,
+        additionalToolNamePrefix: '',
+        useStandardContentBlocks: false,
+        onConnectionError: 'throw' as const,
+        servers: {},
     },
 };
 
@@ -150,6 +214,7 @@ export function loadConfig(): Config {
         openai?: Partial<OpenAIConfig>;
         agent?: Partial<AgentConfig> & { compaction?: Partial<CompactionConfig> };
         exec?: ExecConfigFile;
+        mcp?: Partial<MCPConfig>;
         dingtalk?: DingTalkConfig;
     } = {};
 
@@ -186,6 +251,11 @@ export function loadConfig(): Config {
             approvals: {
                 enabled: fileConfig.exec?.approvals?.enabled ?? DEFAULT_CONFIG.exec.approvals.enabled,
             },
+        },
+        mcp: {
+            ...DEFAULT_CONFIG.mcp,
+            ...fileConfig.mcp,
+            servers: fileConfig.mcp?.servers || DEFAULT_CONFIG.mcp.servers,
         },
         dingtalk: fileConfig.dingtalk,
     };

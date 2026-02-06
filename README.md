@@ -7,6 +7,7 @@
 - 🧠 **记忆系统**: 每日/长期记忆写入与检索，支持自动记忆 flush
 - 🧹 **上下文压缩**: 自动/手动压缩对话历史，展示 token 使用情况
 - 🛠️ **技能系统**: SKILL.md 定义技能，动态加载与子代理协作
+- 🔌 **MCP 集成**: 支持通过 `@langchain/mcp-adapters` 挂载 MCP 工具（stdio / http(sse)）
 - 💬 **交互模式**: CLI 对话 + DingTalk Stream 机器人模式
 - 🧾 **命令执行**: 白名单命令执行，支持审批与超时/输出限制
 - 📁 **文件读写**: 工作区文件系统读写，支撑记忆与技能存储
@@ -58,6 +59,29 @@ cp .qwen/config/settings_example.json ~/.qwen/settings.json
             "enabled": true // 是否允许执行命令行审批
         }
     },
+    "mcp": {
+        "enabled": false, // 是否启用 MCP 工具
+        "throwOnLoadError": true, // 工具加载失败时是否直接报错
+        "prefixToolNameWithServerName": true, // 工具名是否加 server 前缀
+        "additionalToolNamePrefix": "", // 额外前缀
+        "useStandardContentBlocks": false,
+        "onConnectionError": "throw", // throw 或 ignore
+        "servers": {
+            "filesystem": { // stdio 示例
+                "transport": "stdio",
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-filesystem", "./workspace"]
+            },
+            "weather": { // http/sse 示例
+                "transport": "sse",
+                "url": "https://example.com/mcp/sse",
+                "headers": {
+                    "Authorization": "Bearer YOUR_TOKEN"
+                },
+                "automaticSSEFallback": true
+            }
+        }
+    },
     "dingtalk": {
         "enabled": false, //是否开启钉钉机器人
         "clientId": "", // 钉钉clientId
@@ -78,6 +102,14 @@ cp .qwen/config/settings_example.json ~/.qwen/settings.json
     }
 }
 ```
+
+### MCP 配置说明
+
+- `servers.<name>.transport = "stdio"`: 本地子进程模式，必须配置 `command`，可选 `args/env/cwd/restart`。
+- `servers.<name>.transport = "http"`: 走 Streamable HTTP，可配 `url/headers/reconnect`。
+- `servers.<name>.transport = "sse"`: 走 SSE，可配 `url/headers/reconnect`。
+- `automaticSSEFallback`: 对 `http`/`sse` 连接启用自动降级。
+- MCP 工具会自动注入主 Agent 工具列表，CLI 和 DingTalk 模式都会生效。
 
 命令白名单在 `exec-commands.json` 中维护，该配置也建议外挂并持久化：
 
@@ -114,6 +146,7 @@ deepagents_srebot/
 │   ├── dingtalk.ts              # DingTalk 入口
 │   ├── agent.ts                 # 主代理创建
 │   ├── config.ts                # 配置加载
+│   ├── mcp.ts                   # MCP 工具加载与连接管理
 │   ├── commands/                # 斜杠命令 /new /compact /status
 │   ├── compaction/              # 压缩与摘要
 │   ├── middleware/              # 记忆加载/flush

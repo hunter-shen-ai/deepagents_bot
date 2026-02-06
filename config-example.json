@@ -26,6 +26,43 @@
             "enabled": true
         }
     },
+    "mcp": {
+        "enabled": false,
+        "throwOnLoadError": true,
+        "prefixToolNameWithServerName": true,
+        "additionalToolNamePrefix": "",
+        "useStandardContentBlocks": false,
+        "onConnectionError": "throw",
+        "servers": {
+            "filesystem": {
+                "transport": "stdio",
+                "command": "npx",
+                "args": [
+                    "-y",
+                    "@modelcontextprotocol/server-filesystem",
+                    "./workspace"
+                ],
+                "restart": {
+                    "enabled": true,
+                    "maxAttempts": 3,
+                    "delayMs": 1000
+                }
+            },
+            "weather": {
+                "transport": "sse",
+                "url": "https://example.com/mcp/sse",
+                "headers": {
+                    "Authorization": "Bearer YOUR_TOKEN"
+                },
+                "reconnect": {
+                    "enabled": true,
+                    "maxAttempts": 5,
+                    "delayMs": 2000
+                },
+                "automaticSSEFallback": true
+            }
+        }
+    },
     "dingtalk": {
         "enabled": false,
         "clientId": "",

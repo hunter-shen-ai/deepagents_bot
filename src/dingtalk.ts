@@ -74,6 +74,7 @@ function printHeader(config: ReturnType<typeof loadConfig>) {
 
 async function main() {
     const config = loadConfig();
+    let cleanup: (() => Promise<void>) | null = null;
 
     // Validate DingTalk configuration
     if (!config.dingtalk) {
@@ -105,7 +106,8 @@ async function main() {
     log.info('[DingTalk] Initializing agent...');
     const execApprovalPrompt = async (request: ExecApprovalRequest) =>
         requestDingTalkExecApproval(request);
-    const { agent } = await createAgent(config, { execApprovalPrompt });
+    const { agent, cleanup: agentCleanup } = await createAgent(config, { execApprovalPrompt });
+    cleanup = agentCleanup;
     log.info('[DingTalk] Agent initialized successfully');
 
     // Create DingTalk Stream client
@@ -197,6 +199,13 @@ async function main() {
 
         // Note: dingtalk-stream doesn't have a disconnect method,
         // the process will exit and close the connection
+        if (cleanup) {
+            try {
+                await cleanup();
+            } catch (error) {
+                log.warn('[DingTalk] MCP cleanup failed:', error instanceof Error ? error.message : String(error));
+            }
+        }
 
         console.log(`${colors.gray}Goodbye! 👋${colors.reset}`);
         process.exit(0);

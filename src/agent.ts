@@ -16,11 +16,13 @@ import { getSubagents } from './subagents/index.js';
 import { runCommand, type ExecAuditMetadata } from './tools/exec.js';
 import { checkCommandPolicy, type CommandRiskLevel, type PolicyStatus } from './tools/exec-policy.js';
 import { writeExecAuditEvent, type ExecAuditEventType } from './audit/logger.js';
+import { initializeMCPTools } from './mcp.js';
 
 // Define return type to avoid complex type inference issues
 export interface AgentContext {
     agent: any;  // Use any to bypass complex LangGraph type inference
     config: Config;
+    cleanup: () => Promise<void>;
 }
 
 export interface ExecApprovalMetadata {
@@ -345,13 +347,24 @@ export async function createSREAgent(
     // Create exec tool
     const execTool = createExecTool(cfg, execApprovalPrompt);
 
+    // Create MCP tools
+    const mcpBootstrap = await initializeMCPTools(cfg);
+    const mcpTools = mcpBootstrap.tools;
+
     // Combine all tools
-    const allTools = [...memoryTools, execTool];
+    const allTools = [...memoryTools, execTool, ...mcpTools];
 
     // Load initial memory context for system prompt
     const memoryContext = loadMemoryContext(workspacePath);
 
     // System prompt with memory context
+    const mcpServersText = mcpBootstrap.serverNames.length > 0
+        ? `6. **MCP工具**: 你可以使用来自 MCP 服务器的外部工具。`
+        : '';
+    const mcpServersHint = mcpBootstrap.serverNames.length > 0
+        ? `\n## MCP 服务器\n${mcpBootstrap.serverNames.map((name) => `- ${name}`).join('\n')}`
+        : '';
+
     const systemPrompt = `你是 SREBot，一个智能 SRE 助手，专注于系统运维、故障排查和告警处理。
 
 ## 你的能力
@@ -360,6 +373,7 @@ export async function createSREAgent(
 3. **子代理**: 你可以委托专门的任务给子代理处理。
 4. **文件系统**: 你可以读写工作目录中的文件。
 5. **命令执行**: 你可以执行本地系统命令（受白名单限制）。
+${mcpServersText}
 
 ## 子代理
 - **skill-writer-agent**: 专门创建和管理技能文件
@@ -382,21 +396,32 @@ ${memoryContext}
 
 ## 技能目录
 技能存储在 workspace/skills/ 目录下。
+${mcpServersHint}
 
 请使用中文回复用户。`;
 
     // Create the agent with FilesystemBackend and memory tools
-    const agent: any = await createDeepAgent({
-        model,
-        systemPrompt,
-        tools: allTools as any,  // Memory tools + exec tool
-        subagents: subagents as any,
-        backend: () => new FilesystemBackend({ rootDir: workspacePath }),
-        skills: [skillsPath],
-        checkpointer,
-    });
+    let agent: any;
+    try {
+        agent = await createDeepAgent({
+            model,
+            systemPrompt,
+            tools: allTools as any,  // Memory tools + exec tool + MCP tools
+            subagents: subagents as any,
+            backend: () => new FilesystemBackend({ rootDir: workspacePath }),
+            skills: [skillsPath],
+            checkpointer,
+        });
+    } catch (error) {
+        await mcpBootstrap.close();
+        throw error;
+    }
 
-    return { agent, config: cfg };
+    const cleanup = async () => {
+        await mcpBootstrap.close();
+    };
+
+    return { agent, config: cfg, cleanup };
 }
 
 // Export for backward compatibility
