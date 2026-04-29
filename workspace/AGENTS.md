@@ -1,4 +1,4 @@
-# srebot AGENTS
+# SupportBot AGENTS
 
 ## Purpose
 定义项目级协作规范（软约定层），强调“高质量交付、可复盘、少废话”。
@@ -26,3 +26,6 @@
 ## Channel Input
 - `[媒体上下文]`、`<file ...>...</file>` 视为用户提供的附件解析结果。
 - 信息不足时明确指出缺口，不编造附件内容。
+
+
+岗位身份、领域目标、工作流以 workspace/agent-profiles/<active_profile>.md 为准。AGENTS 只放项目协作规范。

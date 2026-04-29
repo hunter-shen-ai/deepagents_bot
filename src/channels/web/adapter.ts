@@ -34,12 +34,16 @@ import {
     sanitizeFileName,
 } from './file-utils.js';
 import {
+    buildSupportWikiGraph,
     listSkillFiles,
     listSkillMarkdownFiles,
-    readSkillFile,
+    listWorkspaceFiles,
     readMemoryMarkdownFile,
+    readSkillFile,
+    readWorkspaceTextFile,
     writeMemoryMarkdownFile,
     writeSkillFile,
+    writeWorkspaceTextFile,
 } from './workspace-file-store.js';
 import { listInstalledSkills } from '../../skills/manager.js';
 import { parseMCPManagementAction, type MCPManager } from '../../mcp-manager.js';
@@ -65,6 +69,7 @@ export interface WebChannelAdapterOptions {
     log: WebLogger;
     workspaceRoot: string;
     skillsRoot: string;
+    supportWikiRoot: string;
     mcpManager?: MCPManager;
     resolveTokenUsage?: (conversationId: string) => WebTokenUsagePayload | null;
     onCancelRequest?: (params: { conversationId: string; requestId?: string; connectionId: string }) => Promise<{
@@ -86,6 +91,8 @@ const UPLOAD_API_PATH = '/api/web/uploads';
 const SKILLS_API_PATH = '/api/web/skills';
 const SKILLS_FILE_API_PATH = '/api/web/files/skills';
 const MEMORY_FILE_API_PATH = '/api/web/files/memory';
+const SUPPORT_WIKI_FILE_API_PATH = '/api/web/files/support-wiki';
+const SUPPORT_WIKI_GRAPH_API_PATH = '/api/web/files/support-wiki/graph';
 const MCP_API_PATH = '/api/web/mcp';
 
 function parseClientEnvelope(raw: RawData): WebClientEnvelope | null {
@@ -401,6 +408,8 @@ export class WebChannelAdapter implements ChannelAdapter {
             || url.pathname === SKILLS_API_PATH
             || url.pathname === SKILLS_FILE_API_PATH
             || url.pathname === MEMORY_FILE_API_PATH
+            || url.pathname === SUPPORT_WIKI_FILE_API_PATH
+            || url.pathname === SUPPORT_WIKI_GRAPH_API_PATH
             || url.pathname === MCP_API_PATH
         )) {
             this.writeApiCorsHeaders(res);
@@ -456,6 +465,30 @@ export class WebChannelAdapter implements ChannelAdapter {
             }
             if (method === 'PUT') {
                 await this.handleMemoryFileWriteRequest(req, res);
+                return;
+            }
+        }
+
+        if (url.pathname === SUPPORT_WIKI_GRAPH_API_PATH) {
+            if (!this.ensureWorkspaceManageApiAuthorized(req, res)) {
+                return;
+            }
+            if (method === 'GET') {
+                await this.handleSupportWikiGraphReadRequest(res);
+                return;
+            }
+        }
+
+        if (url.pathname === SUPPORT_WIKI_FILE_API_PATH) {
+            if (!this.ensureWorkspaceManageApiAuthorized(req, res)) {
+                return;
+            }
+            if (method === 'GET') {
+                await this.handleSupportWikiFileReadRequest(url, res);
+                return;
+            }
+            if (method === 'PUT') {
+                await this.handleSupportWikiFileWriteRequest(req, res);
                 return;
             }
         }
@@ -866,6 +899,117 @@ export class WebChannelAdapter implements ChannelAdapter {
                     updatedAtMs: file.updatedAtMs,
                     content: file.content,
                 },
+            });
+        } catch (error) {
+            this.writeApiError(
+                res,
+                400,
+                'bad_request',
+                error instanceof Error ? error.message : String(error),
+            );
+        }
+    }
+
+    private async handleSupportWikiFileReadRequest(url: URL, res: ServerResponse): Promise<void> {
+        try {
+            const relPath = tryTrim(url.searchParams.get('path')) || tryTrim(url.searchParams.get('file'));
+            const tree = await listWorkspaceFiles({
+                rootPath: this.options.supportWikiRoot,
+            });
+            const file = relPath
+                ? await readWorkspaceTextFile({
+                    rootPath: this.options.supportWikiRoot,
+                    relativePath: relPath,
+                })
+                : undefined;
+
+            this.writeApiJson(res, 200, {
+                ok: true,
+                rootPath: tree.rootPath,
+                exists: tree.exists,
+                summary: {
+                    fileCount: tree.fileCount,
+                    directoryCount: tree.directoryCount,
+                },
+                tree: tree.tree,
+                file: file
+                    ? {
+                        path: file.relativePath,
+                        absPath: file.absPath,
+                        missing: !file.exists,
+                        sizeBytes: file.sizeBytes,
+                        updatedAtMs: file.updatedAtMs,
+                        content: file.content,
+                    }
+                    : undefined,
+            });
+        } catch (error) {
+            this.writeApiError(
+                res,
+                400,
+                'bad_request',
+                error instanceof Error ? error.message : String(error),
+            );
+        }
+    }
+
+    private async handleSupportWikiFileWriteRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+        try {
+            const body = await this.readJsonBody(req, 2 * 1024 * 1024);
+            const relPath = tryTrim(body.path) || tryTrim(body.file);
+            if (!relPath) {
+                this.writeApiError(res, 400, 'bad_request', 'path 不能为空');
+                return;
+            }
+            if (typeof body.content !== 'string') {
+                this.writeApiError(res, 400, 'bad_request', 'content 必须是字符串');
+                return;
+            }
+
+            const file = await writeWorkspaceTextFile({
+                rootPath: this.options.supportWikiRoot,
+                relativePath: relPath,
+                content: body.content,
+            });
+            const tree = await listWorkspaceFiles({
+                rootPath: this.options.supportWikiRoot,
+            });
+            this.writeApiJson(res, 200, {
+                ok: true,
+                rootPath: tree.rootPath,
+                exists: true,
+                summary: {
+                    fileCount: tree.fileCount,
+                    directoryCount: tree.directoryCount,
+                },
+                tree: tree.tree,
+                file: {
+                    path: file.relativePath,
+                    absPath: file.absPath,
+                    missing: false,
+                    sizeBytes: file.sizeBytes,
+                    updatedAtMs: file.updatedAtMs,
+                    content: file.content,
+                },
+            });
+        } catch (error) {
+            this.writeApiError(
+                res,
+                400,
+                'bad_request',
+                error instanceof Error ? error.message : String(error),
+            );
+        }
+    }
+
+    private async handleSupportWikiGraphReadRequest(res: ServerResponse): Promise<void> {
+        try {
+            const graph = await buildSupportWikiGraph({
+                rootPath: this.options.supportWikiRoot,
+            });
+            this.writeApiJson(res, 200, {
+                ok: true,
+                ...graph,
             });
         } catch (error) {
             this.writeApiError(

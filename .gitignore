@@ -10,6 +10,7 @@ workspace/memory/**
 !workspace/memory/.gitkeep
 config.json
 config.json.bak
+config_sre.json
 
 # workspace目录
 workspace/config/
@@ -25,3 +26,8 @@ workspace/skills/cloud-resource-bill
 workspace/skills/hologres-cost-analysis
 workspace/skills/oss-cost-analysis
 workspace/skills/apm-alert-analyzer
+
+
+# wiki目录&skill
+workspace/skills/llm-wiki
+workspace/support-wiki

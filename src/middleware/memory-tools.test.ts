@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { withChannelConversationContext } from '../channels/context.js';
@@ -191,4 +191,43 @@ test('memory_save_team accepts multiline string fields for list sections', async
     assert.match(mainMemory, /- 不要假设或硬编码日期/);
     assert.match(mainMemory, /- 2026-03-10 用户再次纠正日期/);
     assert.match(mainMemory, /- 标签: 标准流程 \/ 时间校验|- 标签: 时间校验 \/ 标准流程/);
+});
+
+test('memory_get returns guidance instead of throwing for non-memory wiki paths', async (t) => {
+    const workspacePath = await mkdtemp(join(tmpdir(), 'srebot-memory-get-wiki-'));
+    t.after(async () => {
+        await rm(workspacePath, { recursive: true, force: true });
+    });
+
+    await mkdir(join(workspacePath, 'wiki', 'topics'), { recursive: true });
+    await writeFile(join(workspacePath, 'wiki', 'topics', 'KPI指标体系.md'), '# KPI 指标体系\n', 'utf-8');
+
+    const config = structuredClone(DEFAULT_CONFIG);
+    config.agent.memory.backend = 'filesystem';
+    config.agent.memory.pgsql.enabled = false;
+
+    const tools = createMemoryTools(workspacePath, config);
+    const getTool = tools.find((tool) => tool.name === 'memory_get');
+    assert.ok(getTool, 'memory_get should be registered');
+
+    await withChannelConversationContext(
+        {
+            channel: 'web',
+            conversationId: 'gva-21bf4109-e906-4c35-aabc-41ec2fdabe3a',
+            isDirect: true,
+            senderId: 'user-a',
+            senderName: 'User A',
+            pendingReplyFiles: [],
+        },
+        async () => {
+            const result = await getTool!.invoke({
+                path: 'wiki/topics/KPI指标体系.md',
+                from: 1,
+                lines: 10,
+            });
+            assert.equal(typeof result, 'string');
+            assert.match(String(result), /memory_get 无法读取该路径/);
+            assert.match(String(result), /support_query_runner\.py/);
+        },
+    );
 });

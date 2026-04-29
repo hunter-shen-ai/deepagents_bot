@@ -423,7 +423,322 @@ Web 渠道当前默认会做三层持久化：
 - 只允许访问 `MEMORY.md` 或 `memory/**/*.md`
 - 禁止 `..`、绝对路径、符号链接/硬链接目标
 
-### 3.8 管理 MCP 运行态
+### 3.8 管理 Support Wiki 文件
+
+用于外部前端把 `workspace/support-wiki` 当作固定知识库目录来浏览和编辑。该接口由服务端读取本地磁盘，不依赖浏览器的 File System Access API，因此前端无需让用户手动选择文件夹。
+
+固定根目录来自配置：
+
+```json
+{
+  "agent": {
+    "support_wiki_root": "./workspace/support-wiki"
+  }
+}
+```
+
+接口：
+
+- `GET /api/web/files/support-wiki`
+- `GET /api/web/files/support-wiki?path=<support wiki 内相对路径>`
+- `PUT /api/web/files/support-wiki`
+- `GET /api/web/files/support-wiki/graph`
+
+鉴权：
+
+- 若配置了 `web.authToken`，请求需带 `Authorization: Bearer <token>`，或 `x-web-auth-token: <token>`。
+- 若未配置 `web.authToken`，默认放行（建议内网使用）。
+
+#### 3.8.1 获取目录树
+
+`GET /api/web/files/support-wiki`
+
+示例：
+
+```bash
+curl "http://127.0.0.1:18081/api/web/files/support-wiki" \
+  -H "Authorization: Bearer <token>"
+```
+
+响应示例：
+
+```json
+{
+  "ok": true,
+  "rootPath": "/abs/path/workspace/support-wiki",
+  "exists": true,
+  "summary": {
+    "fileCount": 12,
+    "directoryCount": 4
+  },
+  "tree": [
+    {
+      "path": "wiki",
+      "name": "wiki",
+      "kind": "directory",
+      "children": [
+        {
+          "path": "wiki/ops",
+          "name": "ops",
+          "kind": "directory",
+          "children": [
+            {
+              "path": "wiki/ops/runbook.md",
+              "name": "runbook.md",
+              "kind": "file",
+              "sizeBytes": 2048,
+              "updatedAtMs": 1772580000000
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "README.md",
+      "name": "README.md",
+      "kind": "file",
+      "sizeBytes": 512,
+      "updatedAtMs": 1772580000000
+    }
+  ]
+}
+```
+
+字段说明：
+
+- `rootPath`：服务端解析后的 Support Wiki 绝对路径，仅用于展示/调试，不应回传给接口
+- `exists`：根目录是否存在；不存在时 `tree=[]`
+- `tree`：目录树，目录节点有 `children`，文件节点有 `sizeBytes` / `updatedAtMs`
+- `path`：相对 `support_wiki_root` 的路径，后续读取/写入都使用这个值
+
+#### 3.8.2 读取文件
+
+`GET /api/web/files/support-wiki?path=wiki/ops/runbook.md`
+
+示例：
+
+```bash
+curl "http://127.0.0.1:18081/api/web/files/support-wiki?path=wiki%2Fops%2Frunbook.md" \
+  -H "Authorization: Bearer <token>"
+```
+
+响应示例：
+
+```json
+{
+  "ok": true,
+  "rootPath": "/abs/path/workspace/support-wiki",
+  "exists": true,
+  "summary": {
+    "fileCount": 12,
+    "directoryCount": 4
+  },
+  "tree": [
+    { "path": "README.md", "name": "README.md", "kind": "file", "sizeBytes": 512, "updatedAtMs": 1772580000000 }
+  ],
+  "file": {
+    "path": "wiki/ops/runbook.md",
+    "absPath": "/abs/path/workspace/support-wiki/wiki/ops/runbook.md",
+    "missing": false,
+    "sizeBytes": 2048,
+    "updatedAtMs": 1772580000000,
+    "content": "# Runbook\n\n..."
+  }
+}
+```
+
+说明：
+
+- `file.path` 是相对路径，建议前端保存和回传这个值
+- `file.absPath` 仅用于管理台展示/调试，不建议作为业务状态保存
+- 如果目标文件不存在，`file.missing=true`，`content` 不返回
+- 读取文件时也会返回最新 `tree`，方便前端刷新文件树
+
+#### 3.8.3 写入文件
+
+`PUT /api/web/files/support-wiki`
+
+请求头：
+
+```http
+Content-Type: application/json
+Authorization: Bearer <token>
+```
+
+请求体：
+
+```json
+{
+  "path": "wiki/ops/faq.md",
+  "content": "# FAQ\n\nanswer"
+}
+```
+
+`path` 也兼容字段名 `file`：
+
+```json
+{
+  "file": "wiki/ops/faq.md",
+  "content": "# FAQ\n\nanswer"
+}
+```
+
+响应示例：
+
+```json
+{
+  "ok": true,
+  "rootPath": "/abs/path/workspace/support-wiki",
+  "exists": true,
+  "summary": {
+    "fileCount": 13,
+    "directoryCount": 4
+  },
+  "tree": [
+    { "path": "wiki/ops/faq.md", "name": "faq.md", "kind": "file", "sizeBytes": 13, "updatedAtMs": 1772580001000 }
+  ],
+  "file": {
+    "path": "wiki/ops/faq.md",
+    "absPath": "/abs/path/workspace/support-wiki/wiki/ops/faq.md",
+    "missing": false,
+    "sizeBytes": 13,
+    "updatedAtMs": 1772580001000,
+    "content": "# FAQ\n\nanswer"
+  }
+}
+```
+
+说明：
+
+- 写入是原子写入：先写临时文件，再 rename 到目标文件
+- 如果父目录不存在，服务端会在 `support_wiki_root` 内自动创建
+- 写入成功后返回最新 `tree` 和写入后的 `file`
+
+#### 3.8.4 获取图谱数据
+
+`GET /api/web/files/support-wiki/graph`
+
+用于给 Obsidian 风格拓扑图提供数据。后端会扫描 `support_wiki_root` 下的 Markdown 文件，解析 wikilink、frontmatter 关系、tags 和 headings，并返回节点与边；前端负责 D3/canvas/SVG 的布局、缩放、拖拽和高亮交互。
+
+示例：
+
+```bash
+curl "http://127.0.0.1:18081/api/web/files/support-wiki/graph" \
+  -H "Authorization: Bearer <token>"
+```
+
+响应示例：
+
+```json
+{
+  "ok": true,
+  "exists": true,
+  "rootPath": "/abs/path/workspace/support-wiki",
+  "summary": {
+    "nodeCount": 42,
+    "edgeCount": 88,
+    "noteCount": 39,
+    "unresolvedCount": 3,
+    "indexedAt": 1772580000000
+  },
+  "nodes": [
+    {
+      "id": "wiki/ops/runbook.md",
+      "path": "wiki/ops/runbook.md",
+      "label": "runbook",
+      "kind": "note",
+      "dir": "wiki/ops",
+      "degree": 5,
+      "tags": ["ops", "incident"],
+      "headings": [
+        { "level": 1, "text": "Runbook", "slug": "runbook", "line": 1 }
+      ],
+      "sizeBytes": 2048,
+      "updatedAtMs": 1772580000000
+    },
+    {
+      "id": "::unresolved::missing note",
+      "label": "Missing Note",
+      "kind": "unresolved",
+      "degree": 1
+    }
+  ],
+  "edges": [
+    {
+      "source": "wiki/ops/runbook.md",
+      "target": "wiki/ops/faq.md",
+      "type": "wikilink",
+      "targetRaw": "FAQ",
+      "alias": "common questions",
+      "resolved": true
+    },
+    {
+      "source": "wiki/ops/runbook.md",
+      "target": "::unresolved::missing note",
+      "type": "wikilink",
+      "targetRaw": "Missing Note",
+      "resolved": false
+    }
+  ]
+}
+```
+
+节点字段：
+
+- `id`：图谱节点 ID；真实笔记等于相对路径，未解析节点以 `::unresolved::` 开头
+- `kind`：`note` 表示真实 Markdown 笔记，`unresolved` 表示被引用但不存在的目标
+- `path`：真实笔记的相对路径；未解析节点没有该字段
+- `label`：展示名称，默认取文件名去扩展名；未解析节点取原始引用名称
+- `degree`：关联边数量，前端可用于节点大小
+- `tags` / `headings`：从 Markdown 内容提取，可用于筛选、侧栏或跳转
+
+边字段：
+
+- `source`：源笔记节点 ID
+- `target`：目标节点 ID，可能是真实笔记路径，也可能是 `::unresolved::...`
+- `type`：`wikilink` 来自 `[[...]]`，`frontmatter` 来自 frontmatter 关系字段
+- `targetRaw`：原始引用目标，例如 `FAQ#Heading`
+- `alias`：wikilink alias，例如 `[[FAQ|common questions]]`
+- `resolved`：是否解析到真实 Markdown 笔记
+
+解析规则：
+
+- 支持 `[[Note]]`、`[[Note|alias]]`、`[[Note#Heading]]`、`[[dir/Note]]`
+- 优先精确路径匹配，其次同目录相对匹配，最后按 basename 匹配
+- 会跳过 embed 链接，例如 `![[image.png]]`
+- frontmatter 中 `related`、`parent`、`children`、`refs`、`links`、`see_also`、`next`、`prev` 等关系字段会生成 `frontmatter` 边
+- `resolved=false` 的边会生成未解析节点，方便前端展示“悬空引用”
+
+前端建议：
+
+- 直接把 `nodes` / `edges` 交给 D3 force graph 或 canvas 渲染
+- 点击 `kind=note` 的节点后，用 `GET /api/web/files/support-wiki?path=<node.path>` 打开文件
+- `kind=unresolved` 的节点只做高亮或提示，不调用文件读取接口
+- 保存文件后重新请求 graph 即可刷新拓扑
+
+限制：
+
+- 只允许相对路径，禁止绝对路径
+- 禁止 `.` / `..` 路径段
+- 拒绝符号链接、硬链接和越界路径
+- 只允许读写文本文件：`.md`、`.markdown`、`.txt`、`.json`、`.yaml`、`.yml`
+- 单文件读取/写入默认限制 `2MB`
+- 目录树默认最多 `5000` 个条目
+- 目录树会跳过 dot 开头的条目（例如 `.git`、`.obsidian`）以及 `node_modules`、`Thumbs.db`、`desktop.ini`
+
+失败响应示例：
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "bad_request",
+    "message": "路径非法：不允许使用 . 或 .."
+  }
+}
+```
+
+### 3.9 管理 MCP 运行态
 
 用于查询当前进程里已加载的 MCP server / tools，并对 MCP 做热重载、启停、增删改。
 

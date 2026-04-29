@@ -604,6 +604,7 @@ export async function startWebService(options?: {
     const cancelRegistry = new WebConversationCancelRegistry();
     const memoryWorkspacePath = resolve(process.cwd(), config.agent.workspace);
     const skillsPath = resolve(process.cwd(), config.agent.skills_dir);
+    const supportWikiPath = resolve(process.cwd(), config.agent.support_wiki_root);
     let compactionModelPromise: Promise<BaseChatModel> | null = null;
     const skillMonitor = createSkillDirectoryMonitor({
         skillsDir: skillsPath,
@@ -1054,6 +1055,7 @@ export async function startWebService(options?: {
         log,
         workspaceRoot: memoryWorkspacePath,
         skillsRoot: skillsPath,
+        supportWikiRoot: supportWikiPath,
         mcpManager,
         resolveTokenUsage: (conversationId: string) =>
             resolveWebTokenUsage(conversationStates, conversationId, config),

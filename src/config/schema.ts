@@ -65,6 +65,9 @@ const configSchemaInternal = z.object({
     agent: z.object({
         workspace: z.string().min(1),
         skills_dir: z.string().min(1),
+        profile_dir: z.string().min(1),
+        active_profile: z.string().regex(/^[A-Za-z0-9._-]+$/, 'active_profile 只能包含字母、数字、点、下划线和连字符'),
+        support_wiki_root: z.string().min(1),
         recursion_limit: z.number().int().positive(),
         compaction: z.object({
             enabled: z.boolean(),

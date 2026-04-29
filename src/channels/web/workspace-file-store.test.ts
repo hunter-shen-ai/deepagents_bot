@@ -4,14 +4,18 @@ import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promis
 import os from 'node:os';
 import path from 'node:path';
 import {
+    buildSupportWikiGraph,
     listSkillFiles,
     listSkillMarkdownFiles,
+    listWorkspaceFiles,
     readMemoryMarkdownFile,
     readSkillFile,
     readSkillMarkdownFile,
+    readWorkspaceTextFile,
     writeSkillFile,
     writeMemoryMarkdownFile,
     writeSkillMarkdownFile,
+    writeWorkspaceTextFile,
 } from './workspace-file-store.js';
 
 test('skill markdown read/write/list works', async () => {
@@ -209,5 +213,139 @@ test('memory markdown rejects symlink targets', async () => {
         );
     } finally {
         await rm(workspaceRoot, { recursive: true, force: true });
+    }
+});
+
+test('workspace text file tree read/write works for fixed support wiki root', async () => {
+    const supportWikiRoot = await mkdtemp(path.join(os.tmpdir(), 'srebot-web-support-wiki-'));
+
+    try {
+        await mkdir(path.join(supportWikiRoot, 'wiki', 'ops'), { recursive: true });
+        await writeFile(path.join(supportWikiRoot, 'README.md'), '# Wiki\n', 'utf8');
+        await writeFile(path.join(supportWikiRoot, 'wiki', 'ops', 'runbook.md'), '# Runbook\n', 'utf8');
+        await mkdir(path.join(supportWikiRoot, '.obsidian'), { recursive: true });
+        await writeFile(path.join(supportWikiRoot, '.obsidian', 'workspace.json'), '{}', 'utf8');
+
+        const tree = await listWorkspaceFiles({ rootPath: supportWikiRoot });
+        assert.equal(tree.exists, true);
+        assert.equal(tree.fileCount, 2);
+        assert.ok(tree.tree.some((item) => item.path === 'README.md' && item.kind === 'file'));
+        assert.ok(tree.tree.some((item) => item.path === 'wiki' && item.kind === 'directory'));
+        assert.ok(!tree.tree.some((item) => item.path === '.obsidian'));
+
+        const readResult = await readWorkspaceTextFile({
+            rootPath: supportWikiRoot,
+            relativePath: 'wiki/ops/runbook.md',
+        });
+        assert.equal(readResult.exists, true);
+        assert.equal(readResult.content, '# Runbook\n');
+
+        const writeResult = await writeWorkspaceTextFile({
+            rootPath: supportWikiRoot,
+            relativePath: 'wiki/ops/faq.md',
+            content: '# FAQ\n\nanswer',
+        });
+        assert.equal(writeResult.exists, true);
+        assert.equal(writeResult.relativePath, 'wiki/ops/faq.md');
+
+        const written = await readFile(path.join(supportWikiRoot, 'wiki', 'ops', 'faq.md'), 'utf8');
+        assert.equal(written, '# FAQ\n\nanswer');
+    } finally {
+        await rm(supportWikiRoot, { recursive: true, force: true });
+    }
+});
+
+test('workspace text file rejects unsafe and non-text paths', async () => {
+    const supportWikiRoot = await mkdtemp(path.join(os.tmpdir(), 'srebot-web-support-wiki-'));
+
+    try {
+        await assert.rejects(
+            () => readWorkspaceTextFile({
+                rootPath: supportWikiRoot,
+                relativePath: '../secret.md',
+            }),
+            /路径非法/u,
+        );
+        await assert.rejects(
+            () => writeWorkspaceTextFile({
+                rootPath: supportWikiRoot,
+                relativePath: 'images/logo.png',
+                content: 'x',
+            }),
+            /仅支持/u,
+        );
+    } finally {
+        await rm(supportWikiRoot, { recursive: true, force: true });
+    }
+});
+
+test('support wiki graph resolves wikilinks, frontmatter links, and unresolved nodes', async () => {
+    const supportWikiRoot = await mkdtemp(path.join(os.tmpdir(), 'srebot-web-support-wiki-'));
+
+    try {
+        await mkdir(path.join(supportWikiRoot, 'wiki', 'ops'), { recursive: true });
+        await writeFile(
+            path.join(supportWikiRoot, 'wiki', 'ops', 'runbook.md'),
+            [
+                '---',
+                'related:',
+                '  - FAQ',
+                '---',
+                '# Runbook',
+                '',
+                'See [[FAQ|common questions]] and [[Missing Note]].',
+                'Embed should be ignored: ![[diagram.png]]',
+            ].join('\n'),
+            'utf8',
+        );
+        await writeFile(
+            path.join(supportWikiRoot, 'wiki', 'ops', 'FAQ.md'),
+            [
+                '# FAQ',
+                '',
+                'Back to [[runbook]].',
+            ].join('\n'),
+            'utf8',
+        );
+        await writeFile(
+            path.join(supportWikiRoot, 'wiki', 'other.md'),
+            '# Other\n\n#tagged',
+            'utf8',
+        );
+
+        const graph = await buildSupportWikiGraph({ rootPath: supportWikiRoot });
+        assert.equal(graph.exists, true);
+        assert.equal(graph.summary.noteCount, 3);
+        assert.equal(graph.summary.unresolvedCount, 1);
+
+        const runbook = graph.nodes.find((item) => item.id === 'wiki/ops/runbook.md');
+        assert.ok(runbook);
+        assert.equal(runbook.label, 'runbook');
+        assert.equal(runbook.kind, 'note');
+        assert.ok(runbook.headings?.some((item) => item.text === 'Runbook'));
+
+        assert.ok(graph.nodes.some((item) => item.id === 'wiki/ops/FAQ.md' && item.kind === 'note'));
+        assert.ok(graph.nodes.some((item) => item.id === '::unresolved::missing note' && item.kind === 'unresolved'));
+        assert.ok(graph.edges.some((item) =>
+            item.source === 'wiki/ops/runbook.md'
+            && item.target === 'wiki/ops/FAQ.md'
+            && item.type === 'wikilink'
+            && item.alias === 'common questions'
+            && item.resolved === true,
+        ));
+        assert.ok(graph.edges.some((item) =>
+            item.source === 'wiki/ops/runbook.md'
+            && item.target === 'wiki/ops/FAQ.md'
+            && item.type === 'frontmatter'
+            && item.resolved === true,
+        ));
+        assert.ok(graph.edges.some((item) =>
+            item.source === 'wiki/ops/runbook.md'
+            && item.target === '::unresolved::missing note'
+            && item.resolved === false,
+        ));
+        assert.ok(!graph.edges.some((item) => item.target.toLowerCase().includes('diagram')));
+    } finally {
+        await rm(supportWikiRoot, { recursive: true, force: true });
     }
 });

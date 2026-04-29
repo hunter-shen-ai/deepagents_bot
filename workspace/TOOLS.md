@@ -12,6 +12,7 @@
 ## Memory Tools
 - 历史回溯问题：先 `memory_search`。
 - 需要精确引用：`memory_search` 命中后再 `memory_get`。
+- `memory_get` 只能读取 `memory_search` 返回的记忆路径，不能读取 Support Wiki / llm-wiki / workspace 文件。
 - 用户明确要求“记住/保存”：调用 `memory_save`。
 
 ## Correction Loop
@@ -20,3 +21,6 @@
 ## Exec Tools
 - 严格遵守系统白名单/黑名单与审批策略。
 - 非必要不执行破坏性命令；优先可回滚方案。
+
+
+> 注意：Support profile 下，FAQ、报错、支持口径、SOP、历史案例优先使用 llm-wiki 和 Support Wiki Root。

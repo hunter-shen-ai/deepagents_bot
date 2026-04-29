@@ -517,7 +517,27 @@ export function createMemoryTools(workspacePath: string, config: Config) {
         async ({ path, from, lines }: { path: string; from?: number; lines?: number }) => {
             const scope = resolveMemoryScope(config.agent.memory.session_isolation);
             const runtime = await runtimePromise;
-            const result = await runtime.get(path, { from, lines }, scope);
+            let result;
+            try {
+                result = await runtime.get(path, { from, lines }, scope);
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                if (message.includes('memory_get path is not allowed')) {
+                    return [
+                        `memory_get 无法读取该路径: ${path}`,
+                        `原因: ${message}`,
+                        'memory_get 只能读取 memory_search 返回的记忆路径，例如 memory/scopes/**/*.md 或 session_events 路径。',
+                        '如果你要读取 Support Wiki / llm-wiki 内容，不要使用 memory_get；请改用 support_query_runner.py 或工作区文件/命令读取工具。',
+                    ].join('\n');
+                }
+                if (message.includes('memory_get path is outside workspace')) {
+                    return [
+                        `memory_get 无法读取工作区外路径: ${path}`,
+                        'memory_get 只用于读取当前工作区内的记忆文件；请先用 memory_search 获取可读取路径。',
+                    ].join('\n');
+                }
+                throw error;
+            }
             const meta = [
                 `已读取记忆片段: ${result.path}`,
                 `(scope=${result.scope}, source=${result.source}, from=${result.fromLine}, lines=${result.lineCount}, to=${result.toLine}${result.truncated ? ', truncated=true' : ''})`,
@@ -526,7 +546,7 @@ export function createMemoryTools(workspacePath: string, config: Config) {
         },
         {
             name: 'memory_get',
-            description: '按 path 精读记忆片段（建议先 memory_search）。支持 memory/scopes/**/*.md 与 session_events 路径，可选 from/lines。',
+            description: '按 path 精读记忆片段（必须来自 memory_search 返回结果）。只支持 memory/scopes/**/*.md 与 session_events 路径；不能读取 Support Wiki、workspace/wiki 或任意项目文件。',
             schema: z.object({
                 path: z.string().describe('要读取的记忆路径，建议直接使用 memory_search 返回的 path'),
                 from: z.number().int().min(1).optional().describe('起始行号（从 1 开始），默认 1'),

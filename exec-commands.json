@@ -36,7 +36,9 @@
         "pandoc",
         "cd",
         "cat",
-        "mysql"
+        "mysql",
+        "grep",
+        "jq"
     ],
     "deniedCommands": [
         "rm",

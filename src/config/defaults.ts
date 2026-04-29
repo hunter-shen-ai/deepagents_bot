@@ -36,6 +36,9 @@ export const DEFAULT_CONFIG: Config = {
     agent: {
         workspace: './workspace',
         skills_dir: './workspace/skills',
+        profile_dir: './workspace/agent-profiles',
+        active_profile: 'sre',
+        support_wiki_root: './workspace/support-wiki',
         recursion_limit: 100,
         compaction: {
             enabled: true,

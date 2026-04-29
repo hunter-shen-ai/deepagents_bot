@@ -16,6 +16,8 @@ export function renderWebChatPage(config: WebConfig): string {
         sessionApiPath: '/api/web/sessions',
         uploadApiPath: '/api/web/uploads',
         skillsApiPath: '/api/web/skills',
+        supportWikiApiPath: '/api/web/files/support-wiki',
+        supportWikiGraphApiPath: '/api/web/files/support-wiki/graph',
         authRequired: Boolean(config.authToken?.trim()),
     });
 

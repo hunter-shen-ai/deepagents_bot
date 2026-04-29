@@ -26,6 +26,9 @@
     "agent": {
         "workspace": "./workspace",
         "skills_dir": "./workspace/skills",
+        "profile_dir": "./workspace/agent-profiles",
+        "active_profile": "sre",
+        "support_wiki_root": "./workspace/support-wiki",
         "recursion_limit": 50,
         "compaction": {
             "enabled": true,
@@ -89,6 +92,20 @@
                 "enabled": false,
                 "max_chars_per_entry": 3000
             }
+        },
+        "_support_profile_example": {
+            "active_profile": "support",
+            "support_wiki_root": "./workspace/support-wiki",
+            "memory": {
+                "backend": "filesystem",
+                "pgsql": {
+                    "enabled": false
+                },
+                "embedding": {
+                    "enabled": false
+                }
+            },
+            "note": "Support Agent 若主要依赖 llm-wiki，可用这组值关闭 PGSQL 记忆与向量索引层。"
         }
     },
     "exec": {

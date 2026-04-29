@@ -111,6 +111,9 @@ export interface AgentMemoryConfig {
 export interface AgentConfig {
     workspace: string;
     skills_dir: string;
+    profile_dir: string;
+    active_profile: string;
+    support_wiki_root: string;
     recursion_limit: number;
     compaction: CompactionConfig;
     memory: AgentMemoryConfig;
