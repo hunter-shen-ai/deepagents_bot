@@ -24,7 +24,7 @@
         "title": "SREBot 定时任务"
       },
       "state": {
-        "nextRunAtMs": 1777060800000,
+        "nextRunAtMs": 1778616000000,
         "lastRunAtMs": 1773633041893,
         "lastStatus": "ok",
         "lastDurationMs": 46270
@@ -50,7 +50,7 @@
         "target": "cidiEyrF5XkYWeE9XY4IyDrMg=="
       },
       "state": {
-        "nextRunAtMs": 1776902400000,
+        "nextRunAtMs": 1778544000000,
         "lastRunAtMs": 1776384010013,
         "lastStatus": "error",
         "lastDurationMs": 10006,
