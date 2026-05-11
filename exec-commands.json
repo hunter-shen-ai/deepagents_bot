@@ -36,7 +36,8 @@
         "pandoc",
         "cd",
         "cat",
-        "mysql"
+        "mysql",
+        "aliyun"
     ],
     "deniedCommands": [
         "rm",

@@ -1,0 +1,10 @@
+FROM budweiserapac-registry.cn-shanghai.cr.aliyuncs.com/budtech-dev/deepagents-srebot:v1.36
+
+USER root
+RUN bash -c "$(curl -fsSL https://aliyuncli.alicdn.com/install.sh)"
+USER ubuntu
+
+COPY --chown=ubuntu:0 exec-commands.json ./exec-commands.json
+
+
+CMD ["pnpm", "start:server"]
