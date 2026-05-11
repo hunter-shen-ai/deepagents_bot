@@ -25,3 +25,5 @@ workspace/skills/cloud-resource-bill
 workspace/skills/hologres-cost-analysis
 workspace/skills/oss-cost-analysis
 workspace/skills/apm-alert-analyzer
+workspace/skills/
+workspace/support-wiki
