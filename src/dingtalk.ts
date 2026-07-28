@@ -1,3 +1,5 @@
+import { shutdownAgentPondTracing } from './instrumentation.js';
+
 /**
  * DingTalk Entry Point
  * 
@@ -1019,6 +1021,7 @@ export async function startDingTalkService(options?: {
 
         console.log(`${colors.gray}Goodbye! 👋${colors.reset}`);
         if (exitOnShutdown) {
+            await shutdownAgentPondTracing();
             process.exit(0);
         }
     };

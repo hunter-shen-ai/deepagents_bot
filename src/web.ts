@@ -1,3 +1,4 @@
+import { shutdownAgentPondTracing } from './instrumentation.js';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -1113,6 +1114,7 @@ export async function startWebService(options?: {
         conversationStates.clear();
 
         if (exitOnShutdown) {
+            await shutdownAgentPondTracing();
             process.exit(0);
         }
     };

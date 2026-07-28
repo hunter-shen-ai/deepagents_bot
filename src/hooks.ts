@@ -1,3 +1,4 @@
+import { shutdownAgentPondTracing } from './instrumentation.js';
 import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse, type Server as HTTPServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
@@ -562,6 +563,7 @@ export async function startHooksService(options?: {
         conversationStates.clear();
 
         if (exitOnShutdown) {
+            await shutdownAgentPondTracing();
             process.exit(0);
         }
     };

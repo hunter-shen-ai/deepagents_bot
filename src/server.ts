@@ -1,3 +1,4 @@
+import { shutdownAgentPondTracing } from './instrumentation.js';
 import { loadConfig } from './config.js';
 import { startDingTalkService } from './dingtalk.js';
 import { startHooksService } from './hooks.js';
@@ -202,6 +203,7 @@ export async function startServer(): Promise<void> {
                 hooksLogWriter.close().catch(() => undefined),
             ]);
 
+            await shutdownAgentPondTracing();
             process.exit(hasError ? 1 : 0);
         };
 

@@ -1,3 +1,4 @@
+import { shutdownAgentPondTracing } from './instrumentation.js';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
@@ -320,6 +321,7 @@ export async function startIOSService(options?: {
         }
 
         if (exitOnShutdown) {
+            await shutdownAgentPondTracing();
             process.exit(0);
         }
     };

@@ -1,3 +1,4 @@
+import { shutdownAgentPondTracing } from './instrumentation.js';
 import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import crypto from 'node:crypto';
@@ -387,6 +388,7 @@ async function main() {
 
         console.log(`\n${colors.gray}Goodbye! 👋${colors.reset}`);
         rl.close();
+        await shutdownAgentPondTracing();
         process.exit(0);
     }
 

@@ -6,6 +6,7 @@ logs/
 output/
 tmp/
 .env
+.agentpond/
 config.local.json
 
 # Keep workspace structure but ignore memory contents

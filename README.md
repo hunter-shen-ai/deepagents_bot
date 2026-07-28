@@ -107,6 +107,31 @@ pnpm start:server
 
 > 提示：`pnpm server` 是 pnpm 自带命令，项目脚本请使用 `pnpm run server`（或别名 `pnpm channels`）。
 
+### AgentPond 链路追踪
+
+可信 Node.js 运行时可选择启用
+[AgentPond](https://github.com/marcusschiesser/agentpond)，将 LangChain /
+LangGraph 的 OpenInference 链路直接写入自己管理的对象存储。未加载
+Files SDK 环境时，追踪模块不会启动。
+
+```bash
+npx agentpond init
+npx agentpond env init local \
+  --provider fs \
+  --root "$PWD/.agentpond/envs/local/objects"
+npx agentpond env use local
+
+eval "$(npx agentpond env get local)"
+pnpm dev
+
+npx agentpond sync
+npx agentpond traces list --limit 10
+```
+
+本地 `fs` provider 仅用于开发验证。部署时请从
+[Files SDK provider 目录](https://files-sdk.dev/docs/providers)选择持久化存储。
+OpenInference 会记录模型和工具的输入输出，生产环境启用前请先确认数据隐私策略。
+
 日志说明（统一服务端）：
 
 - 服务端日志：`logs/server-YYYY-MM-DD.log`
